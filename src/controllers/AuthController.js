@@ -2,65 +2,64 @@ var jwt = require("jsonwebtoken");
 var bcrypt = require("bcrypt");
 const User = require("../model/User")
 
-// Function to generate JWT
-function generateAccessToken(user) {
-    return jwt.sign({
-        id: user.id
-    }, "this is secret key", {
-        expiresIn: 86400
-    });
-}
+
 
 var signup = (req, res) => {
-    // Validation
-    if (!req.body.fullName || !req.body.email || !req.body.password) {
-        return res.status(400).send({ message: "All fields are required." });
-    }
-
     const user = new User({
         fullName: req.body.fullName,
         email: req.body.email,
+        password: bcrypt.hashSync(req.body.password, 8),
         role: req.body.role,
-        password: bcrypt.hashSync(req.body.password, 8)
+        preference: req.body.preference,
     });
-
-    user.save()
-        .then(data => {
-            res.status(200).send({ message: "User Registered successfully" });
+    user
+        .save()
+        .then((data) => {
+            return res.status(200).json({ message: "User registered successfully" });
         })
-        .catch(err => {
-            res.status(500).send({ message: "Error registering user." });
+        .catch((err) => {
+            return res.status(500).json({ error: err });
         });
 };
 
 var signin = (req, res) => {
-    if (!req.body.email || !req.body.password) {
-        return res.status(400).send({ message: "Email and password are required." });
-    }
-
-    User.findOne({ email: req.body.email })
-        .then(user => {
+    let emailPassed = req.body.email;
+    let passwordPassed = req.body.password;
+    User.findOne({
+        email: emailPassed,
+    })
+        .then((user) => {
             if (!user) {
-                return res.status(404).send({ message: "User Not found." });
+                return res.status(404).json({
+                    message: "User not found",
+                });
             }
-            var passwordIsValid = bcrypt.compareSync(req.body.password, user.password);
-            if (!passwordIsValid) {
-                return res.status(401).send({ message: "Invalid Password!" });
+            var isPasswordValid = bcrypt.compareSync(passwordPassed, user.password);
+            if (!isPasswordValid) {
+                return res.status(401).send({
+                    message: "Invalid Password",
+                });
+            } else {
+                var token = jwt.sign(
+                    {
+                        id: user.id,
+                    },
+                    "this is secret",
+                    {
+                        expiresIn: 86400,
+                    }
+                );
+                console.log("here");
+                return res.status(200).send({
+                    user: {
+                        id: user.id,
+                    },
+                    message: "Login successful",
+                    accessToken: token,
+                });
             }
-            var token = generateAccessToken(user);
-       
-            res.status(200).send({
-                user: {
-                    id: user._id,
-                    email: user.email,
-                    fullName: user.fullName,
-                },
-                message: "Login successful",
-                accessToken: token,
-            });
-        })
-        .catch(err => {
-            res.status(500).send({ message: "Error signing in." });
+        }).catch((err) => {
+            return res.status(500).json("error", err);
         });
 };
 
